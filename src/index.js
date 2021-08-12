@@ -95,7 +95,7 @@ class App {
   }
 
   async createBackground() {
-    const tex = await loadTexture("../texture.jpg");
+    const tex = await loadTexture("/images/texture.jpg");
     const quad = new THREE.Mesh(
       new THREE.PlaneBufferGeometry(),
       new THREE.MeshBasicMaterial({ map: tex })
