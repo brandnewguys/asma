@@ -26,6 +26,22 @@ class App {
       y: 0
     };
 
+    //NOTE: when necassary the creation of this array could be automated when a parcel build is triggered
+    this.texturePaths = [
+      "/images/texture-0.jpg", 
+      "/images/texture-1.jpg", 
+      "/images/texture-2.jpg", 
+      "/images/texture-3.jpg"
+    ];
+    this.textures = [];
+    this.texturePointer = 0;
+    this.swipe = {
+      start: {
+        x: 0,
+      },
+      prevDistance: 0,
+    }
+
     this.setup();
   }
 
@@ -43,6 +59,7 @@ class App {
 
   async setup() {
     this.createScene();
+    await this.loadTextures();
 
     this.envFbo = new THREE.WebGLRenderTarget(
       this.vp.width * this.vp.dpr,
@@ -94,13 +111,22 @@ class App {
     document.body.appendChild(this.renderer.domElement);
   }
 
+  async loadTextures() {
+    for(let path of this.texturePaths) {
+      const tex = await loadTexture(path);
+      this.textures.push(tex); 
+    }
+  }
+
   async createBackground() {
-    const tex = await loadTexture("/images/texture.jpg");
+    const tex = this.textures[this.texturePointer];
     const quad = new THREE.Mesh(
       new THREE.PlaneBufferGeometry(),
       new THREE.MeshBasicMaterial({ map: tex })
     );
     quad.layers.set(1);
+
+    //TODO: calc based on the texture what the scale of the image should be
     quad.scale.set(this.vp.height * 2, this.vp.height, 1);
     return quad;
   }
@@ -114,8 +140,15 @@ class App {
 
     this.backfaceMaterial = new BackfaceMaterial();
 
-    let { model } = await loadModel("../diamond.glb");
+    let { model } = await loadModel("/diamond.glb");
     return model.children[0];
+  }
+
+  switchTexture() {
+    this.quad.material.map = this.textures[this.texturePointer];
+    this.quad.material.needsUpdate = true;
+    //TODO: calc based on the texture what the scale of the image should be
+    //quad.scale.set(this.vp.height * 2, this.vp.height, 1);
   }
 
   render() {
@@ -182,6 +215,7 @@ class App {
   handleMouseDown(e) {
     this.pointerDown = true;
     this.pointer.x = e.touches ? e.touches[0].clientX : e.clientX;
+    this.swipe.start.x = this.pointer.x 
   }
 
   handleMouseMove(e) {
@@ -191,6 +225,21 @@ class App {
     this.velocity += (x - this.pointer.x) * 0.001;
 
     this.pointer.x = x;
+
+    const distance = (this.pointer.x - this.swipe.start.x) / this.vp.width; 
+    //BUG: scroll behaviour is not 100% predictable -> switch back & forth at same position not similar distance
+
+      if(distance < -0.4) {
+        this.texturePointer = (this.texturePointer - 1) >= 0 ? this.texturePointer - 1 : this.texturePaths.length - 1;
+        this.swipe.start.x = this.pointer.x;
+        this.switchTexture();
+      }
+
+      if(distance > 0.4) {
+        this.texturePointer = (this.texturePointer + 1) % this.texturePaths.length;
+        this.swipe.start.x = this.pointer.x;
+        this.switchTexture();
+      }
   }
 
   handleMouseUp() {
