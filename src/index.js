@@ -34,13 +34,8 @@ class App {
       "/images/texture-3.jpg"
     ];
     this.textures = [];
-    this.texturePointer = 0;
-    this.swipe = {
-      start: {
-        x: 0,
-      },
-      prevDistance: 0,
-    }
+    this.textureId = 0;
+    this.nav = [-1, 0, 1]
 
     this.setup();
   }
@@ -60,6 +55,7 @@ class App {
   async setup() {
     this.createScene();
     await this.loadTextures();
+    this.nav[0] = this.textures.length - 1; 
 
     this.envFbo = new THREE.WebGLRenderTarget(
       this.vp.width * this.vp.dpr,
@@ -119,7 +115,7 @@ class App {
   }
 
   async createBackground() {
-    const tex = this.textures[this.texturePointer];
+    const tex = this.textures[this.textureId];
     const quad = new THREE.Mesh(
       new THREE.PlaneBufferGeometry(),
       new THREE.MeshBasicMaterial({ map: tex })
@@ -145,7 +141,7 @@ class App {
   }
 
   switchTexture() {
-    this.quad.material.map = this.textures[this.texturePointer];
+    this.quad.material.map = this.textures[this.textureId];
     this.quad.material.needsUpdate = true;
     //TODO: calc based on the texture what the scale of the image should be
     //quad.scale.set(this.vp.height * 2, this.vp.height, 1);
@@ -212,10 +208,41 @@ class App {
     this.orthoCamera.updateProjectionMatrix();
   }
 
+  getActiveSection() {
+    const sectionWidth = this.vp.width / this.nav.length; 
+    const section = Object.keys(this.nav)[Math.floor(this.pointer.x /sectionWidth)]; 
+    return section;
+  }
+
+  recalcSections(baseSection) {
+    this.nav[baseSection] = this.textureId;
+    console.log(`base section: ${baseSection}, texture: ${this.textureId}`)
+
+    for(let [section, texture] of this.nav.entries()) {
+      if(section == baseSection) {
+        continue;
+      }
+
+      const distanceFromBase = section - baseSection;
+      let textureId = this.textureId + distanceFromBase;
+
+      if(textureId < 0) {
+        textureId = this.texturePaths.length + distanceFromBase; 
+      }
+
+      if(textureId > this.texturePaths.length - 1) {
+        textureId = textureId - this.texturePaths.length; 
+      }
+
+      this.nav[section] = textureId;
+      console.log(`section: ${section}, texture: ${textureId}`)
+    }
+  }
+
   handleMouseDown(e) {
     this.pointerDown = true;
     this.pointer.x = e.touches ? e.touches[0].clientX : e.clientX;
-    this.swipe.start.x = this.pointer.x 
+    this.recalcSections(this.getActiveSection());
   }
 
   handleMouseMove(e) {
@@ -223,23 +250,16 @@ class App {
 
     const x = e.touches ? e.touches[0].clientX : e.clientX;
     this.velocity += (x - this.pointer.x) * 0.001;
-
     this.pointer.x = x;
 
-    const distance = (this.pointer.x - this.swipe.start.x) / this.vp.width; 
-    //BUG: scroll behaviour is not 100% predictable -> switch back & forth at same position not similar distance
+    const sectionTextureId = this.nav[this.getActiveSection()];
 
-      if(distance < -0.4) {
-        this.texturePointer = (this.texturePointer - 1) >= 0 ? this.texturePointer - 1 : this.texturePaths.length - 1;
-        this.swipe.start.x = this.pointer.x;
-        this.switchTexture();
-      }
+    if(this.textureId == sectionTextureId || sectionTextureId == undefined) {
+      return;
+    }
 
-      if(distance > 0.4) {
-        this.texturePointer = (this.texturePointer + 1) % this.texturePaths.length;
-        this.swipe.start.x = this.pointer.x;
-        this.switchTexture();
-      }
+    this.textureId = sectionTextureId;
+    this.switchTexture();
   }
 
   handleMouseUp() {
